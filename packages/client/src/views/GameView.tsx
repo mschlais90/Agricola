@@ -13,6 +13,7 @@ import { FeedDialog } from '../components/FeedDialog';
 import { SpaceDialog } from '../components/SpaceDialog';
 import { useGameStore } from '../store/gameStore';
 import { ICON, PLAYER_COLORS, bagText } from '../ui';
+import { RoomLobbyView } from './RoomLobbyView';
 import { ScoringView } from './ScoringView';
 
 /** Effects that need no choices — placing the worker submits immediately. */
@@ -26,17 +27,24 @@ export function GameView() {
   const awaitingPass = useGameStore((s) => s.awaitingPass);
   const acknowledgePass = useGameStore((s) => s.acknowledgePass);
   const quitToLobby = useGameStore((s) => s.quitToLobby);
+  const mySeats = useGameStore((s) => s.mySeats);
+  const connection = useGameStore((s) => s.connection);
+  const disconnectedSeats = useGameStore((s) => s.disconnectedSeats);
   const [openSpace, setOpenSpace] = useState<string | null>(null);
   const [viewSeat, setViewSeat] = useState<number | null>(null);
 
-  if (!state) return null;
+  if (!state) return <RoomLobbyView />;
   if (state.phase === 'finished') return <ScoringView state={state} />;
 
   const active = state.players[state.currentPlayer]!;
-  const shown = state.players[viewSeat ?? state.currentPlayer]!;
+  const iControl = (seat: number) => mySeats === 'all' || mySeats.includes(seat);
+  const myTurn = iControl(state.currentPlayer);
+  const defaultSeat = mySeats === 'all' ? state.currentPlayer : mySeats[0]!;
+  const shown = state.players[viewSeat ?? defaultSeat]!;
   const nextHarvestIn = nextHarvest(state);
 
   const pick = (spaceId: string) => {
+    if (!myTurn) return;
     const def = getActionSpaces(state.config).find((d) => d.id === spaceId)!;
     if (INSTANT.has(def.effect)) {
       submit({ type: 'PLACE_WORKER', player: state.currentPlayer, space: spaceId, choices: {} });
@@ -73,6 +81,16 @@ export function GameView() {
         </div>
       </header>
 
+      {connection === 'reconnecting' && (
+        <div className="bg-amber-500 px-3 py-1 text-center text-sm text-white">Reconnecting…</div>
+      )}
+      {!myTurn && mySeats !== 'all' && (
+        <div className="bg-stone-700 px-3 py-1 text-center text-sm text-white">
+          Waiting for {active.name}
+          {disconnectedSeats.includes(active.id) && ' (disconnected)'}…
+        </div>
+      )}
+
       <main className="mx-auto grid max-w-6xl gap-4 p-3 lg:grid-cols-[1.1fr_1fr]">
         <section>
           <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-stone-500">Actions</h2>
@@ -82,19 +100,20 @@ export function GameView() {
         <section>
           <div className="mb-2 flex items-center justify-between">
             <h2 className="text-sm font-semibold uppercase tracking-wide text-stone-500">
-              {shown.name}'s farm {shown.id !== active.id && '(viewing)'}
+              {shown.name}'s farm {shown.id !== defaultSeat && '(viewing)'}
             </h2>
             <div className="flex gap-1">
               {state.players.map((p) => (
                 <button
                   key={p.id}
-                  onClick={() => setViewSeat(p.id === state.currentPlayer ? null : p.id)}
+                  onClick={() => setViewSeat(p.id === defaultSeat ? null : p.id)}
                   className={`rounded-full px-2 py-0.5 text-xs ${
                     shown.id === p.id ? 'text-white' : 'bg-stone-200 text-stone-600'
                   }`}
                   style={shown.id === p.id ? { background: PLAYER_COLORS[p.id] } : undefined}
                 >
                   {p.name}
+                  {disconnectedSeats.includes(p.id) && ' ⚠'}
                 </button>
               ))}
             </div>
@@ -104,8 +123,8 @@ export function GameView() {
         </section>
       </main>
 
-      {/* dialogs */}
-      {openSpace && state.phase === 'work' && (
+      {/* dialogs — only for seats this client controls */}
+      {openSpace && state.phase === 'work' && myTurn && (
         <SpaceDialog
           state={state}
           spaceId={openSpace}
@@ -116,15 +135,16 @@ export function GameView() {
           onCancel={() => setOpenSpace(null)}
         />
       )}
-      {state.phase === 'feed' && !state.pendingDecision && !awaitingPass && (
-        <FeedDialog state={state} onSubmit={submit} />
-      )}
-      {state.pendingDecision?.type === 'breed' && !awaitingPass && (
-        <BreedDialog state={state} onSubmit={submit} />
-      )}
+      {state.phase === 'feed' &&
+        !state.pendingDecision &&
+        !awaitingPass &&
+        iControl(state.feedQueue[0] ?? -1) && <FeedDialog state={state} onSubmit={submit} />}
+      {state.pendingDecision?.type === 'breed' &&
+        !awaitingPass &&
+        iControl(state.pendingDecision.player) && <BreedDialog state={state} onSubmit={submit} />}
 
       {/* hot-seat pass interstitial */}
-      {awaitingPass !== null && (
+      {awaitingPass !== null && mySeats === 'all' && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/90 p-4">
           <button onClick={acknowledgePass} className="rounded-2xl bg-white px-10 py-8 text-center shadow-2xl">
             <div className="text-sm uppercase tracking-wide text-stone-400">Pass the device to</div>
