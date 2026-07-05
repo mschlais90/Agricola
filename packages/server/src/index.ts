@@ -3,6 +3,7 @@ import os from 'node:os';
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { extname, join, normalize } from 'node:path';
 import { WebSocketServer } from 'ws';
+import qrcode from 'qrcode-terminal';
 import { ENGINE_VERSION } from '@agricola/engine';
 import { config } from './config.js';
 import { RoomManager } from './roomManager.js';
@@ -81,5 +82,8 @@ server.listen(config.port, config.host, () => {
   if (urls.length) {
     console.log('  Family members on your WiFi can open:');
     for (const u of urls) console.log(`    ${u}`);
+    const first = urls[0]!.split(' ')[0]!;
+    console.log('\n  Or scan with a phone:');
+    qrcode.generate(first, { small: true }, (qr) => console.log(qr.replace(/^/gm, '    ')));
   }
 });
