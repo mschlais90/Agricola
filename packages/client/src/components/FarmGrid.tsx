@@ -85,8 +85,6 @@ export function FarmGrid({
       let content: string | null = null;
       if (isRoom) content = '🏠';
       else if (field) content = field.crop ? `${ICON[field.crop]}×${field.count}` : '🟫';
-      // Preview the crop being sown this turn, with the count the field will hold.
-      if (sowing) content = `${ICON[sowing]}×${RULES.sow[sowing]}`;
 
       // Cells being planted/plowed this turn get a dashed accent border.
       const pending = sel?.kind === 'field' || sel?.kind === 'pick';
@@ -103,10 +101,29 @@ export function FarmGrid({
             strokeWidth={pending ? 3 : 1}
             strokeDasharray={pending ? '6 4' : undefined}
           />
-          {content && (
-            <text x={x + CELL / 2} y={y + CELL / 2 + (isStable ? -12 : 0)} textAnchor="middle" dominantBaseline="central" fontSize={field || sowing ? 24 : 34}>
-              {content}
-            </text>
+          {/* Sow preview: show the crop's image large, with the resulting count as a badge. */}
+          {sowing ? (
+            <>
+              <text x={x + CELL / 2} y={y + CELL / 2 - 8} textAnchor="middle" dominantBaseline="central" fontSize={44}>
+                {ICON[sowing]}
+              </text>
+              <text
+                x={x + CELL / 2}
+                y={y + CELL - 20}
+                textAnchor="middle"
+                fontSize={17}
+                fontWeight="bold"
+                fill="#1c1917"
+              >
+                planting ×{RULES.sow[sowing]}
+              </text>
+            </>
+          ) : (
+            content && (
+              <text x={x + CELL / 2} y={y + CELL / 2 + (isStable ? -12 : 0)} textAnchor="middle" dominantBaseline="central" fontSize={field ? 24 : 34}>
+                {content}
+              </text>
+            )
           )}
           {isStable && (
             <text x={x + CELL / 2} y={y + CELL - 22} textAnchor="middle" fontSize={22}>

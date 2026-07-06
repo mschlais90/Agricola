@@ -13,8 +13,19 @@ if not exist "node_modules" (
     )
 )
 
-if not exist "packages\client\dist\index.html" (
-    echo Building Agricola - this only happens once, or after you pull updates...
+REM Rebuild whenever the code has changed since the last build (tracked by commit hash),
+REM or if there is no build yet. This ensures updates actually take effect.
+set "CURRENT="
+for /f "delims=" %%i in ('git rev-parse HEAD 2^>nul') do set "CURRENT=%%i"
+set "LAST="
+if exist ".last-build" set /p LAST=<".last-build"
+
+set "NEEDBUILD="
+if not exist "packages\client\dist\index.html" set "NEEDBUILD=1"
+if not "%CURRENT%"=="%LAST%" set "NEEDBUILD=1"
+
+if defined NEEDBUILD (
+    echo Building Agricola - this happens the first time and after each update...
     call npm run build
     if errorlevel 1 (
         echo.
@@ -22,6 +33,7 @@ if not exist "packages\client\dist\index.html" (
         pause
         exit /b 1
     )
+    if defined CURRENT (>".last-build" echo %CURRENT%)
 )
 
 echo.
