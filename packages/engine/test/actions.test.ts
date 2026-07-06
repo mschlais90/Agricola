@@ -149,6 +149,20 @@ describe('sowing and baking', () => {
     const next = place(s, 'sow-bake', { bakeGrain: 2 });
     expect(next.players[0]!.resources.food).toBe(4); // resources were reset; 2 grain × 2
   });
+
+  it('plow-and-sow can plow a fresh cell and sow it in the same action', () => {
+    const s = game();
+    s.actionSpaces['plow-sow'] = { revealed: true, occupiedBy: null, pool: {} };
+    const p = s.players[0]!;
+    p.resources = { grain: 1 };
+    // exactly the composite action the fixed dialog produces: plow 0,4 then sow it
+    const next = place(s, 'plow-sow', {
+      cell: '0,4',
+      sow: [{ cell: '0,4', crop: 'grain' }],
+    });
+    expect(next.players[0]!.farm.fields['0,4']).toEqual({ crop: 'grain', count: 3 });
+    expect(next.players[0]!.resources.grain).toBe(0);
+  });
 });
 
 describe('improvements', () => {

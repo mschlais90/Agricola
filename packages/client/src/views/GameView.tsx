@@ -2,12 +2,14 @@ import { useState } from 'react';
 import {
   IMPROVEMENT_BY_ID,
   RULES,
+  canCookAnimals,
   foodRequired,
   getActionSpaces,
   type GameState,
 } from '@agricola/engine';
 import { ActionBoard } from '../components/ActionBoard';
 import { BreedDialog } from '../components/BreedDialog';
+import { ConvertDialog } from '../components/ConvertDialog';
 import { FarmGrid } from '../components/FarmGrid';
 import { FeedDialog } from '../components/FeedDialog';
 import { SpaceDialog } from '../components/SpaceDialog';
@@ -32,6 +34,7 @@ export function GameView() {
   const disconnectedSeats = useGameStore((s) => s.disconnectedSeats);
   const [openSpace, setOpenSpace] = useState<string | null>(null);
   const [viewSeat, setViewSeat] = useState<number | null>(null);
+  const [showCook, setShowCook] = useState(false);
 
   if (!state) return <RoomLobbyView />;
   if (state.phase === 'finished') return <ScoringView state={state} />;
@@ -42,6 +45,11 @@ export function GameView() {
   const defaultSeat = mySeats === 'all' ? state.currentPlayer : mySeats[0]!;
   const shown = state.players[viewSeat ?? defaultSeat]!;
   const nextHarvestIn = nextHarvest(state);
+
+  // Anytime cooking is done by the seat you control (the current player in hot-seat).
+  const cookSeat = mySeats === 'all' ? state.currentPlayer : mySeats[0]!;
+  const canCook = canCookSomething(state.players[cookSeat]!);
+  const showCookButton = state.phase === 'work' && awaitingPass === null && canCook;
 
   const pick = (spaceId: string) => {
     if (!myTurn) return;
@@ -120,6 +128,14 @@ export function GameView() {
           </div>
           <FarmGrid farm={shown.farm} />
           <PlayerPanel state={state} playerId={shown.id} />
+          {showCookButton && (
+            <button
+              onClick={() => setShowCook(true)}
+              className="mt-2 w-full rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800 hover:bg-amber-100"
+            >
+              {ICON.food} Cook to food (any time)
+            </button>
+          )}
         </section>
       </main>
 
@@ -142,6 +158,17 @@ export function GameView() {
       {state.pendingDecision?.type === 'breed' &&
         !awaitingPass &&
         iControl(state.pendingDecision.player) && <BreedDialog state={state} onSubmit={submit} />}
+      {showCook && (
+        <ConvertDialog
+          state={state}
+          seat={cookSeat}
+          onSubmit={(a) => {
+            submit(a);
+            setShowCook(false);
+          }}
+          onClose={() => setShowCook(false)}
+        />
+      )}
 
       {/* hot-seat pass interstitial */}
       {awaitingPass !== null && mySeats === 'all' && (
@@ -174,6 +201,12 @@ function nextHarvest(state: GameState): number {
   return 0;
 }
 
+function canCookSomething(player: GameState['players'][number]): boolean {
+  if ((player.resources.grain ?? 0) > 0 || (player.resources.vegetable ?? 0) > 0) return true;
+  const animals = player.farm.animals;
+  return canCookAnimals(player) && animals.sheep + animals.boar + animals.cattle > 0;
+}
+
 function PlayerPanel({ state, playerId }: { state: GameState; playerId: number }) {
   const p = state.players[playerId]!;
   const feedNeed = foodRequired(state, p);
@@ -196,7 +229,11 @@ function PlayerPanel({ state, playerId }: { state: GameState; playerId: number }
       {p.improvements.length > 0 && (
         <div className="mt-1.5 flex flex-wrap gap-1">
           {p.improvements.map((id) => (
-            <span key={id} className="rounded bg-amber-50 px-1.5 py-0.5 text-xs text-amber-800 ring-1 ring-amber-200">
+            <span
+              key={id}
+              title={IMPROVEMENT_BY_ID[id]?.desc}
+              className="cursor-help rounded bg-amber-50 px-1.5 py-0.5 text-xs text-amber-800 ring-1 ring-amber-200"
+            >
               {IMPROVEMENT_BY_ID[id]?.label ?? id}
             </span>
           ))}

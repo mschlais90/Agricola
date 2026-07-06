@@ -2,10 +2,12 @@ import type { ResourceBag } from '@agricola/engine';
 
 /** Artwork-free iconography (emoji only — no copied assets). */
 export const ICON: Record<string, string> = {
-  wood: '🪵',
+  // wood/stone use Unicode 6.0 emoji (🌲/🗿) rather than the newer 🪵/🪨,
+  // which don't render on some Windows 10 Segoe UI Emoji builds.
+  wood: '🌲',
   clay: '🧱',
   reed: '🎋',
-  stone: '🪨',
+  stone: '🗿',
   grain: '🌾',
   vegetable: '🥕',
   food: '🍲',

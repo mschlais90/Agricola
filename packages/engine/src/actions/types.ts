@@ -35,7 +35,9 @@ export interface SpaceChoices {
 export type GameAction =
   | { type: 'PLACE_WORKER'; player: PlayerId; space: string; choices?: SpaceChoices }
   | { type: 'HARVEST_FEED'; player: PlayerId; conversions: FeedConversion[] }
-  | { type: 'BREED_CHOICE'; player: PlayerId; keep: AnimalType[] };
+  | { type: 'BREED_CHOICE'; player: PlayerId; keep: AnimalType[] }
+  /** Anytime cooking: fireplaces/hearths convert vegetables & animals (and raw grain/veg) to food. */
+  | { type: 'CONVERT'; player: PlayerId; conversions: FeedConversion[] };
 
 export interface LegalActionDescriptor {
   space: string;

@@ -5,9 +5,11 @@ import {
   canBake,
   getActionSpaces,
   validateAction,
+  type Crop,
   type EdgeRef,
   type GameAction,
   type GameState,
+  type ImprovementDef,
   type SpaceChoices,
 } from '@agricola/engine';
 import { FarmGrid } from './FarmGrid';
@@ -71,6 +73,30 @@ export function SpaceDialog({ state, spaceId, onSubmit, onCancel }: SpaceDialogP
     ...(choices.sow ?? []).map((s) => ({ cell: s.cell, kind: 'field' as const })),
   ];
 
+  const isEmptyField = (cell: string) => {
+    const f = player.farm.fields[cell];
+    return !!f && f.crop === null && f.count === 0;
+  };
+  const isPlowable = (cell: string) =>
+    !player.farm.fields[cell] &&
+    !player.farm.rooms.includes(cell) &&
+    !player.farm.stables.includes(cell);
+
+  /** Cycle a sowable cell's crop: empty → grain → vegetable → empty (skipping seeds you lack). */
+  const cycleSow = (cell: string) => {
+    const cur = choices.sow ?? [];
+    const crop = cur.find((s) => s.cell === cell)?.crop ?? null;
+    const seq: (Crop | null)[] = [null];
+    if ((player.resources.grain ?? 0) > 0) seq.push('grain');
+    if ((player.resources.vegetable ?? 0) > 0) seq.push('vegetable');
+    const next = seq[(seq.indexOf(crop) + 1) % seq.length] ?? null;
+    const without = cur.filter((s) => s.cell !== cell);
+    patch({ sow: next ? [...without, { cell, crop: next }] : without });
+  };
+
+  const clearPlow = () =>
+    setChoices((c) => ({ ...c, cell: undefined, sow: (c.sow ?? []).filter((s) => isEmptyField(s.cell)) }));
+
   const onCellClick = (cell: string) => {
     switch (def.effect) {
       case 'farmExpansion':
@@ -78,31 +104,26 @@ export function SpaceDialog({ state, spaceId, onSubmit, onCancel }: SpaceDialogP
         else patch({ stables: toggleCell(choices.stables, cell) });
         return;
       case 'plow':
+        if (!isPlowable(cell)) return;
         patch({ cell: choices.cell === cell ? undefined : cell });
         return;
       case 'plowSow': {
-        // first tap = plow target; taps on empty fields = sow toggle
-        if (player.farm.fields[cell]) return toggleSow(cell);
-        patch({ cell: choices.cell === cell ? undefined : cell });
+        // Tap an empty field or the freshly-plowed cell to cycle its crop;
+        // tap any other empty cell to choose it as the field to plow.
+        if (isEmptyField(cell) || choices.cell === cell) return cycleSow(cell);
+        if (isPlowable(cell))
+          setChoices((c) => ({
+            ...c,
+            cell,
+            sow: (c.sow ?? []).filter((s) => isEmptyField(s.cell) || s.cell === cell),
+          }));
         return;
       }
       case 'sowBake':
-        return toggleSow(cell);
+        if (isEmptyField(cell)) return cycleSow(cell);
+        return;
       default:
         return;
-    }
-  };
-
-  const toggleSow = (cell: string) => {
-    const cur = choices.sow ?? [];
-    const existing = cur.find((s) => s.cell === cell);
-    if (!existing) {
-      const crop = (player.resources.grain ?? 0) > 0 ? 'grain' : 'vegetable';
-      patch({ sow: [...cur, { cell, crop }] });
-    } else if (existing.crop === 'grain' && (player.resources.vegetable ?? 0) > 0) {
-      patch({ sow: cur.map((s) => (s.cell === cell ? { cell, crop: 'vegetable' as const } : s)) });
-    } else {
-      patch({ sow: cur.filter((s) => s.cell !== cell) });
     }
   };
 
@@ -131,8 +152,9 @@ export function SpaceDialog({ state, spaceId, onSubmit, onCancel }: SpaceDialogP
 
         {(def.effect === 'sowBake' || def.effect === 'plowSow') && (
           <p className="mb-2 text-xs text-stone-500">
-            Tap empty fields to sow (tap again to switch crop / clear).
-            {def.effect === 'plowSow' && ' Tap an empty cell to plow it.'}
+            {def.effect === 'plowSow' && 'Tap an empty cell to plow it. '}
+            Tap a field to sow — each tap cycles empty → {ICON.grain} grain → {ICON.vegetable} vegetable →
+            empty.
           </p>
         )}
 
@@ -153,6 +175,12 @@ export function SpaceDialog({ state, spaceId, onSubmit, onCancel }: SpaceDialogP
               def.effect === 'fences' || def.effect === 'renovationFences' ? toggleEdge : undefined
             }
           />
+        )}
+
+        {def.effect === 'plowSow' && choices.cell && (
+          <button onClick={clearPlow} className="mt-1 text-xs text-stone-500 underline">
+            Clear plowed field
+          </button>
         )}
 
         {(def.effect === 'dayLaborer' || def.effect === 'resourceChoice') && (
@@ -321,6 +349,12 @@ function ImprovementShop({
   patch: (p: Partial<SpaceChoices>) => void;
 }) {
   const player = state.players[state.currentPlayer]!;
+  const affordable = (d: ImprovementDef) => {
+    if (d.upgradeFrom?.some((f) => player.improvements.includes(f))) return true;
+    return Object.entries(d.cost).every(
+      ([r, n]) => (player.resources[r as keyof typeof player.resources] ?? 0) >= (n as number),
+    );
+  };
   return (
     <div className="grid grid-cols-1 gap-1.5">
       {optional && (
@@ -336,9 +370,12 @@ function ImprovementShop({
       {IMPROVEMENTS.filter((d) => (state.improvementSupply[d.id] ?? 0) > 0).map((d) => {
         const canUpgrade = d.upgradeFrom?.some((f) => player.improvements.includes(f));
         const selected = choices.improvement === d.id;
+        const can = affordable(d);
         return (
           <button
             key={d.id}
+            title={d.desc}
+            disabled={!can && !selected}
             onClick={() =>
               patch({
                 improvement: selected ? undefined : d.id,
@@ -347,13 +384,23 @@ function ImprovementShop({
               })
             }
             className={`rounded-lg border px-3 py-2 text-left text-sm ${
-              selected ? 'border-amber-500 bg-amber-50' : 'border-stone-200 hover:bg-stone-50'
+              selected
+                ? 'border-amber-500 bg-amber-50'
+                : can
+                  ? 'border-stone-200 hover:bg-stone-50'
+                  : 'border-stone-200 bg-stone-50 opacity-50'
             }`}
           >
-            <span className="font-medium">{d.label}</span>
-            <span className="float-right text-stone-500">
-              {canUpgrade ? '↩ upgrade' : bagText(d.cost as Record<string, number>)} · {d.points}pt
+            <span className="flex items-center justify-between gap-2">
+              <span className="font-medium">{d.label}</span>
+              <span className={`whitespace-nowrap ${can ? 'text-stone-500' : 'text-red-500'}`}>
+                {canUpgrade ? '↩ upgrade' : bagText(d.cost as Record<string, number>)} · {d.points}pt
+              </span>
             </span>
+            <span className="mt-0.5 block text-xs leading-snug text-stone-500">{d.desc}</span>
+            {!can && !canUpgrade && (
+              <span className="mt-0.5 block text-xs font-medium text-red-500">Can't afford</span>
+            )}
           </button>
         );
       })}

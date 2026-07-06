@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { reduce } from '../src/actions/reduce';
+import { reduce, validateAction } from '../src/actions/reduce';
 import { bakeFood } from '../src/rules/feeding';
 import { game } from './helpers';
 import type { GameState } from '../src/state/types';
@@ -106,6 +106,47 @@ describe('feeding', () => {
     s.players[0]!.resources.food = 6;
     const next = reduce(s, { type: 'HARVEST_FEED', player: 0, conversions: [] });
     expect(next.players[0]!.resources.food).toBe(0);
+  });
+});
+
+describe('anytime cooking (CONVERT)', () => {
+  it('cooks animals to food during the work phase with a fireplace', () => {
+    const s = game(); // round 1, work phase
+    s.players[0]!.improvements = ['fireplace-2'];
+    s.players[0]!.farm.animals.cattle = 1;
+    s.players[0]!.resources.food = 0;
+    const next = reduce(s, { type: 'CONVERT', player: 0, conversions: [{ kind: 'cook-cattle', count: 1 }] });
+    expect(next.players[0]!.resources.food).toBe(3); // cattle → 3
+    expect(next.players[0]!.farm.animals.cattle).toBe(0);
+    // it does not consume a worker or advance the turn
+    expect(next.currentPlayer).toBe(0);
+    expect(next.players[0]!.placed).toBe(0);
+  });
+
+  it('converts raw grain without any improvement', () => {
+    const s = game();
+    s.players[0]!.resources = { food: 0, grain: 2 };
+    const next = reduce(s, { type: 'CONVERT', player: 0, conversions: [{ kind: 'raw-grain', count: 2 }] });
+    expect(next.players[0]!.resources.food).toBe(2);
+  });
+
+  it('rejects cooking without an improvement, workshops, and out of the work phase', () => {
+    const s = game();
+    s.players[0]!.farm.animals.sheep = 1;
+    expect(
+      validateAction(s, { type: 'CONVERT', player: 0, conversions: [{ kind: 'cook-sheep', count: 1 }] }).ok,
+    ).toBe(false);
+
+    s.players[0]!.improvements = ['joinery'];
+    s.players[0]!.resources = { food: 0, wood: 1 };
+    expect(
+      validateAction(s, { type: 'CONVERT', player: 0, conversions: [{ kind: 'workshop-wood', count: 1 }] }).ok,
+    ).toBe(false);
+
+    s.phase = 'feed';
+    expect(
+      validateAction(s, { type: 'CONVERT', player: 0, conversions: [{ kind: 'raw-grain', count: 1 }] }).ok,
+    ).toBe(false);
   });
 });
 

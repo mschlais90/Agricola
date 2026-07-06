@@ -66,6 +66,29 @@ function applyAction(s: GameState, action: GameAction): void {
       return harvestFeed(s, action);
     case 'BREED_CHOICE':
       return breedChoice(s, action);
+    case 'CONVERT':
+      return convert(s, action);
+  }
+}
+
+/**
+ * Anytime cooking. Fireplaces and cooking hearths let a player turn vegetables
+ * and animals into food "at any time" (rulebook, Action A / Harvest phase 2);
+ * raw grain and vegetables are always worth 1 food. We allow this during the
+ * work phase so a player can bank food ahead of a harvest. Workshops are
+ * excluded — they only convert during the harvest.
+ */
+function convert(s: GameState, action: Extract<GameAction, { type: 'CONVERT' }>): void {
+  if (s.phase !== 'work') fail('you can only cook to food during the work phase');
+  if (action.conversions.length === 0) fail('nothing to convert');
+  const player = s.players[action.player] ?? fail('no such player');
+  for (const c of action.conversions) {
+    if (c.kind.startsWith('workshop')) fail('workshops can only be used during the harvest');
+  }
+  try {
+    player.resources.food = (player.resources.food ?? 0) + applyConversions(player, action.conversions);
+  } catch (e) {
+    fail(e instanceof Error ? e.message : 'invalid conversion');
   }
 }
 
