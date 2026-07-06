@@ -32,6 +32,7 @@ export function ActionBoard({ state, onPick }: ActionBoardProps) {
               key={def.id}
               onClick={() => enabled && onPick(def.id)}
               disabled={!enabled}
+              title={!enabled && l?.reason ? l.reason : undefined}
               className={`relative rounded-lg border p-2 text-left text-sm transition ${
                 enabled
                   ? 'cursor-pointer border-amber-500 bg-amber-50 shadow-sm ring-1 ring-amber-300 hover:bg-amber-100'

@@ -13,6 +13,7 @@ import {
   type SpaceChoices,
 } from '@agricola/engine';
 import { FarmGrid } from './FarmGrid';
+import { costLines, costTooltip, isAffordable, shortfallText } from '../costs';
 import { ICON, bagText } from '../ui';
 
 export interface SpaceDialogProps {
@@ -365,12 +366,9 @@ function ImprovementShop({
   patch: (p: Partial<SpaceChoices>) => void;
 }) {
   const player = state.players[state.currentPlayer]!;
-  const affordable = (d: ImprovementDef) => {
-    if (d.upgradeFrom?.some((f) => player.improvements.includes(f))) return true;
-    return Object.entries(d.cost).every(
-      ([r, n]) => (player.resources[r as keyof typeof player.resources] ?? 0) >= (n as number),
-    );
-  };
+  const res = player.resources as Record<string, number | undefined>;
+  const affordable = (d: ImprovementDef) =>
+    d.upgradeFrom?.some((f) => player.improvements.includes(f)) || isAffordable(d.cost, res);
   return (
     <div className="grid grid-cols-1 gap-1.5">
       {optional && (
@@ -387,10 +385,13 @@ function ImprovementShop({
         const canUpgrade = d.upgradeFrom?.some((f) => player.improvements.includes(f));
         const selected = choices.improvement === d.id;
         const can = affordable(d);
+        const tooltip = canUpgrade
+          ? `${d.desc}\n\nCost: return a Fireplace instead of paying.`
+          : `${d.desc}\n\n${costTooltip(d.cost, res)}`;
         return (
           <button
             key={d.id}
-            title={d.desc}
+            title={tooltip}
             disabled={!can && !selected}
             onClick={() =>
               patch({
@@ -404,18 +405,31 @@ function ImprovementShop({
                 ? 'border-amber-500 bg-amber-50'
                 : can
                   ? 'border-stone-200 hover:bg-stone-50'
-                  : 'border-stone-200 bg-stone-50 opacity-50'
+                  : 'border-stone-200 bg-stone-50 opacity-60'
             }`}
           >
             <span className="flex items-center justify-between gap-2">
               <span className="font-medium">{d.label}</span>
-              <span className={`whitespace-nowrap ${can ? 'text-stone-500' : 'text-red-500'}`}>
-                {canUpgrade ? '↩ upgrade' : bagText(d.cost as Record<string, number>)} · {d.points}pt
+              {/* Cost chips: each resource turns red when you're short of it. */}
+              <span className="flex flex-wrap justify-end gap-1 whitespace-nowrap text-stone-500">
+                {canUpgrade ? (
+                  <span>↩ upgrade</span>
+                ) : (
+                  costLines(d.cost, res).map((l) => (
+                    <span key={l.resource} className={l.short > 0 ? 'font-semibold text-red-600' : undefined}>
+                      {l.need}
+                      {ICON[l.resource] ?? l.resource}
+                    </span>
+                  ))
+                )}
+                <span className="text-stone-400">· {d.points}pt</span>
               </span>
             </span>
             <span className="mt-0.5 block text-xs leading-snug text-stone-500">{d.desc}</span>
             {!can && !canUpgrade && (
-              <span className="mt-0.5 block text-xs font-medium text-red-500">Can't afford</span>
+              <span className="mt-0.5 block text-xs font-medium text-red-500">
+                Can't afford — {shortfallText(d.cost, res)} (have {bagText(res) || 'nothing'})
+              </span>
             )}
           </button>
         );
