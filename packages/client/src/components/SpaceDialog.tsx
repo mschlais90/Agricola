@@ -66,11 +66,11 @@ export function SpaceDialog({ state, spaceId, onSubmit, onCancel }: SpaceDialogP
   const needsFarm =
     ['farmExpansion', 'plow', 'plowSow', 'sowBake', 'fences', 'renovationFences'].includes(def.effect);
 
-  const selectedCells: { cell: string; kind: 'room' | 'stable' | 'field' | 'pick' }[] = [
+  const selectedCells: { cell: string; kind: 'room' | 'stable' | 'field' | 'pick'; crop?: Crop }[] = [
     ...(choices.rooms ?? []).map((cell) => ({ cell, kind: 'room' as const })),
     ...(choices.stables ?? []).map((cell) => ({ cell, kind: 'stable' as const })),
     ...(choices.cell ? [{ cell: choices.cell, kind: 'pick' as const }] : []),
-    ...(choices.sow ?? []).map((s) => ({ cell: s.cell, kind: 'field' as const })),
+    ...(choices.sow ?? []).map((s) => ({ cell: s.cell, kind: 'field' as const, crop: s.crop })),
   ];
 
   const isEmptyField = (cell: string) => {
@@ -178,9 +178,25 @@ export function SpaceDialog({ state, spaceId, onSubmit, onCancel }: SpaceDialogP
         )}
 
         {def.effect === 'plowSow' && choices.cell && (
-          <button onClick={clearPlow} className="mt-1 text-xs text-stone-500 underline">
+          <button onClick={clearPlow} className="mt-1 block text-xs text-stone-500 underline">
             Clear plowed field
           </button>
+        )}
+
+        {(def.effect === 'sowBake' || def.effect === 'plowSow') && (choices.sow?.length ?? 0) > 0 && (
+          <div className="mt-2 flex flex-wrap gap-2 rounded-lg bg-stone-50 px-3 py-2 text-sm">
+            <span className="font-medium text-stone-600">Planting:</span>
+            {(['grain', 'vegetable'] as const).map((crop) => {
+              const n = (choices.sow ?? []).filter((s) => s.crop === crop).length;
+              if (n === 0) return null;
+              return (
+                <span key={crop} className="text-stone-700">
+                  {ICON[crop]} {crop} ×{n}{' '}
+                  <span className="text-stone-400">(uses {n} {crop})</span>
+                </span>
+              );
+            })}
+          </div>
         )}
 
         {(def.effect === 'dayLaborer' || def.effect === 'resourceChoice') && (

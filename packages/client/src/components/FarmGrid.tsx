@@ -1,10 +1,12 @@
 import {
   FARM_COLS,
   FARM_ROWS,
+  RULES,
   cellKey,
   computeAssignment,
   computePastures,
   type AnimalType,
+  type Crop,
   type EdgeRef,
   type Farm,
 } from '@agricola/engine';
@@ -16,8 +18,8 @@ const H = FARM_ROWS * CELL;
 
 export interface FarmGridProps {
   farm: Farm;
-  /** Cells highlighted as selected (e.g. rooms/stables being planned). */
-  selectedCells?: { cell: string; kind: 'room' | 'stable' | 'field' | 'pick' }[];
+  /** Cells highlighted as selected (e.g. rooms/stables being planned; `crop` previews a sow). */
+  selectedCells?: { cell: string; kind: 'room' | 'stable' | 'field' | 'pick'; crop?: Crop }[];
   /** Proposed fence edges (fence editor). */
   proposedEdges?: EdgeRef[];
   onCellClick?: (cell: string) => void;
@@ -56,7 +58,7 @@ export function FarmGrid({
   const pastureCellTint = new Map<string, number>();
   pastures.forEach((p, i) => p.cells.forEach((c) => pastureCellTint.set(c, i)));
 
-  const selected = new Map(selectedCells.map((s) => [s.cell, s.kind]));
+  const selected = new Map(selectedCells.map((s) => [s.cell, s]));
 
   const cells = [];
   for (let r = 0; r < FARM_ROWS; r++) {
@@ -69,25 +71,40 @@ export function FarmGrid({
       const isStable = farm.stables.includes(key);
       const inPasture = pastureCellTint.has(key);
       const sel = selected.get(key);
+      const sowing = sel?.kind === 'field' ? sel.crop : undefined;
 
       let fill = '#f5f0e6';
       if (isRoom) fill = MATERIAL_FILL[farm.roomMaterial]!;
       else if (field) fill = '#92652e';
       else if (inPasture) fill = '#bbe3b0';
-      if (sel === 'room') fill = '#eab308';
-      if (sel === 'stable') fill = '#f97316';
-      if (sel === 'field') fill = '#b45309';
-      if (sel === 'pick') fill = '#fde047';
+      if (sel?.kind === 'room') fill = '#eab308';
+      if (sel?.kind === 'stable') fill = '#f97316';
+      if (sel?.kind === 'pick') fill = '#fde047';
+      if (sel?.kind === 'field') fill = sowing === 'vegetable' ? '#fb923c' : sowing === 'grain' ? '#facc15' : '#b45309';
 
       let content: string | null = null;
       if (isRoom) content = '🏠';
       else if (field) content = field.crop ? `${ICON[field.crop]}×${field.count}` : '🟫';
+      // Preview the crop being sown this turn, with the count the field will hold.
+      if (sowing) content = `${ICON[sowing]}×${RULES.sow[sowing]}`;
 
+      // Cells being planted/plowed this turn get a dashed accent border.
+      const pending = sel?.kind === 'field' || sel?.kind === 'pick';
       cells.push(
         <g key={key} onClick={onCellClick ? () => onCellClick(key) : undefined} style={onCellClick ? { cursor: 'pointer' } : undefined}>
-          <rect x={x + 2} y={y + 2} width={CELL - 4} height={CELL - 4} rx={6} fill={fill} stroke="#d6cdb8" />
+          <rect
+            x={x + 2}
+            y={y + 2}
+            width={CELL - 4}
+            height={CELL - 4}
+            rx={6}
+            fill={fill}
+            stroke={pending ? '#166534' : '#d6cdb8'}
+            strokeWidth={pending ? 3 : 1}
+            strokeDasharray={pending ? '6 4' : undefined}
+          />
           {content && (
-            <text x={x + CELL / 2} y={y + CELL / 2 + (isStable ? -12 : 0)} textAnchor="middle" dominantBaseline="central" fontSize={field ? 24 : 34}>
+            <text x={x + CELL / 2} y={y + CELL / 2 + (isStable ? -12 : 0)} textAnchor="middle" dominantBaseline="central" fontSize={field || sowing ? 24 : 34}>
               {content}
             </text>
           )}
