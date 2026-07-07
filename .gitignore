@@ -1,6 +1,7 @@
 node_modules/
 dist/
-data/
+# server runtime persistence only — must NOT match packages/engine/src/data/
+/packages/server/data/
 .last-build
 *.local
 .env
