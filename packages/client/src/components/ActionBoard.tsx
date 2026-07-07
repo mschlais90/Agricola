@@ -1,9 +1,12 @@
+import { useState } from 'react';
 import {
   getActionSpaces,
   getLegalActions,
   type GameState,
 } from '@agricola/engine';
 import { PLAYER_COLORS, bagText } from '../ui';
+import { requirementShort, requirementTooltip } from '../costs';
+import { ImprovementCatalog } from './ImprovementCatalog';
 
 export interface ActionBoardProps {
   state: GameState;
@@ -11,10 +14,12 @@ export interface ActionBoardProps {
 }
 
 export function ActionBoard({ state, onPick }: ActionBoardProps) {
+  const [showCatalog, setShowCatalog] = useState(false);
   const defs = getActionSpaces(state.config);
   const legal = new Map(
     getLegalActions(state, state.currentPlayer).map((l) => [l.space, l]),
   );
+  const res = state.players[state.currentPlayer]?.resources as Record<string, number | undefined>;
   const revealedIds = defs.filter((d) => state.actionSpaces[d.id]?.revealed);
   const upcoming = defs.filter((d) => d.stage && !state.actionSpaces[d.id]?.revealed);
 
@@ -27,12 +32,14 @@ export function ActionBoard({ state, onPick }: ActionBoardProps) {
           const enabled = l?.enabled ?? false;
           const occupant = space.occupiedBy;
           const pool = bagText(space.pool as Record<string, number>);
+          const short = !enabled ? requirementShort(l?.requires, res) : '';
+          const tip = !enabled ? requirementTooltip(l?.reason, l?.requires, res) : undefined;
           return (
             <button
               key={def.id}
               onClick={() => enabled && onPick(def.id)}
               disabled={!enabled}
-              title={!enabled && l?.reason ? l.reason : undefined}
+              title={tip}
               className={`relative rounded-lg border p-2 text-left text-sm transition ${
                 enabled
                   ? 'cursor-pointer border-amber-500 bg-amber-50 shadow-sm ring-1 ring-amber-300 hover:bg-amber-100'
@@ -56,12 +63,23 @@ export function ActionBoard({ state, onPick }: ActionBoardProps) {
                 />
               )}
               {!enabled && l?.reason && occupant === null && (
-                <div className="text-[10px] text-stone-400">{l.reason}</div>
+                <div className="text-[10px] text-stone-400">
+                  {l.reason}
+                  {short && <span className="ml-1 font-semibold text-red-500">· {short}</span>}
+                </div>
               )}
             </button>
           );
         })}
       </div>
+      <button
+        onClick={() => setShowCatalog(true)}
+        className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-stone-300 bg-white px-3 py-1.5 text-xs font-medium text-stone-600 hover:border-amber-400 hover:bg-amber-50"
+      >
+        🏗️ Browse Major Improvements
+        <span className="text-stone-400">— see costs & what you're saving for</span>
+      </button>
+      {showCatalog && <ImprovementCatalog state={state} onClose={() => setShowCatalog(false)} />}
       {upcoming.length > 0 && (
         <div className="mt-3 flex flex-wrap gap-1.5">
           {upcoming

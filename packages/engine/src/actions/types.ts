@@ -1,5 +1,14 @@
 import type { FeedConversion } from '../rules/feeding';
-import type { AnimalCounts, AnimalType, BuildingResource, CellKey, Crop, EdgeRef, PlayerId } from '../state/types';
+import type {
+  AnimalCounts,
+  AnimalType,
+  BuildingResource,
+  CellKey,
+  Crop,
+  EdgeRef,
+  PlayerId,
+  ResourceBag,
+} from '../state/types';
 
 /**
  * Actions are atomic composites: the client bundles every choice a placement
@@ -39,9 +48,24 @@ export type GameAction =
   /** Anytime cooking: fireplaces/hearths convert vegetables & animals (and raw grain/veg) to food. */
   | { type: 'CONVERT'; player: PlayerId; conversions: FeedConversion[] };
 
+/**
+ * One way to satisfy a resource-gated action. An action may offer several
+ * (e.g. Farm Expansion: build a Room *or* a Stable) — affording ANY unblocks it.
+ */
+export interface CostOption {
+  /** Names the path when there's more than one; omitted when there's only one. */
+  label?: string;
+  cost: ResourceBag;
+}
+
 export interface LegalActionDescriptor {
   space: string;
   label: string;
   enabled: boolean;
   reason?: string;
+  /**
+   * Present when the space is blocked specifically by resources: the cost of
+   * each way to satisfy it, so the UI can show what the player is short.
+   */
+  requires?: CostOption[];
 }

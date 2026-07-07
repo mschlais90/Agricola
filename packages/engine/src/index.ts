@@ -5,7 +5,7 @@ export * from './state/types';
 export { setupGame } from './state/setup';
 
 // Actions
-export type { GameAction, SpaceChoices, LegalActionDescriptor } from './actions/types';
+export type { GameAction, SpaceChoices, LegalActionDescriptor, CostOption } from './actions/types';
 export { reduce, validateAction, RuleError } from './actions/reduce';
 export { getLegalActions } from './actions/legal';
 

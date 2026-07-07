@@ -2,8 +2,8 @@ import { getActionSpaces } from '../data/actionSpaces';
 import { IMPROVEMENTS } from '../data/improvements';
 import { RULES } from '../data/config';
 import { countFences } from '../rules/fencing';
-import type { GameState, PlayerId } from '../state/types';
-import type { LegalActionDescriptor } from './types';
+import type { GameState, PlayerId, ResourceBag } from '../state/types';
+import type { CostOption, LegalActionDescriptor } from './types';
 
 /**
  * Cheap per-space enablement for the UI. Full validation happens on submit;
@@ -23,14 +23,20 @@ export function getLegalActions(state: GameState, playerId: PlayerId): LegalActi
       const space = state.actionSpaces[def.id]!;
       if (space.occupiedBy !== null)
         return { space: def.id, label: def.label, enabled: false, reason: 'occupied' };
-      const blocked = blockedReason(state, playerId, def.id);
+      const blocked = blockedInfo(state, playerId, def.id);
       return blocked
-        ? { space: def.id, label: def.label, enabled: false, reason: blocked }
+        ? { space: def.id, label: def.label, enabled: false, reason: blocked.reason, requires: blocked.requires }
         : { space: def.id, label: def.label, enabled: true };
     });
 }
 
-function blockedReason(state: GameState, playerId: PlayerId, spaceId: string): string | null {
+interface BlockInfo {
+  reason: string;
+  /** Set only when the block is a resource shortfall the player could still cover. */
+  requires?: CostOption[];
+}
+
+function blockedInfo(state: GameState, playerId: PlayerId, spaceId: string): BlockInfo | null {
   const player = state.players[playerId]!;
   const res = player.resources;
   const farm = player.farm;
@@ -39,34 +45,45 @@ function blockedReason(state: GameState, playerId: PlayerId, spaceId: string): s
   switch (spaceId) {
     case 'farm-expansion': {
       const roomCost = RULES.costs.room[farm.roomMaterial];
+      const roomBag: ResourceBag = { reed: RULES.costs.room.reedPerRoom };
+      roomBag[farm.roomMaterial] = roomCost;
       const canRoom = (res[farm.roomMaterial] ?? 0) >= roomCost && (res.reed ?? 0) >= RULES.costs.room.reedPerRoom;
       const canStable =
         (res.wood ?? 0) >= RULES.costs.stable.wood && farm.stables.length < RULES.maxStables;
-      return canRoom || canStable ? null : 'cannot afford a room or stable';
+      if (canRoom || canStable) return null;
+      const requires: CostOption[] = [{ label: 'Room', cost: roomBag }];
+      if (farm.stables.length < RULES.maxStables)
+        requires.push({ label: 'Stable', cost: { wood: RULES.costs.stable.wood } });
+      return { reason: 'cannot afford a room or stable', requires };
     }
     case 'fences':
-      return (res.wood ?? 0) >= 1 && countFences(farm) < RULES.maxFences ? null : 'no wood or fences left';
+      if ((res.wood ?? 0) >= 1 && countFences(farm) < RULES.maxFences) return null;
+      if (countFences(farm) >= RULES.maxFences) return { reason: 'no fences left to place' };
+      return { reason: 'need wood for a fence', requires: [{ cost: { wood: RULES.costs.fence.wood } }] };
     case 'family-growth':
-      if (family >= RULES.maxFamily) return 'family at maximum';
-      return farm.rooms.length > family ? null : 'no room for offspring';
+      if (family >= RULES.maxFamily) return { reason: 'family at maximum' };
+      return farm.rooms.length > family ? null : { reason: 'no room for offspring' };
     case 'urgent-family-growth':
-      return family < RULES.maxFamily ? null : 'family at maximum';
+      return family < RULES.maxFamily ? null : { reason: 'family at maximum' };
     case 'major-improvement':
-      return anyAffordableImprovement(state, playerId) ? null : 'cannot afford any improvement';
+      // Detail lives in the browsable catalog (each improvement's own shortfall),
+      // so no single `requires` here — there are up to ten different costs.
+      return anyAffordableImprovement(state, playerId) ? null : { reason: 'cannot afford any improvement' };
     case 'renovation-improvement':
     case 'renovation-fences': {
       const next = farm.roomMaterial === 'wood' ? 'clay' : farm.roomMaterial === 'clay' ? 'stone' : null;
-      if (!next) return 'house already stone';
-      return (res[next] ?? 0) >= farm.rooms.length && (res.reed ?? 0) >= RULES.costs.renovationReed
-        ? null
-        : 'cannot afford renovation';
+      if (!next) return { reason: 'house already stone' };
+      if ((res[next] ?? 0) >= farm.rooms.length && (res.reed ?? 0) >= RULES.costs.renovationReed) return null;
+      const cost: ResourceBag = { reed: RULES.costs.renovationReed };
+      cost[next] = farm.rooms.length;
+      return { reason: 'cannot afford renovation', requires: [{ cost }] };
     }
     case 'sow-bake': {
       const hasEmptyField = Object.values(farm.fields).some((f) => f.crop === null && f.count === 0);
       const canSow = hasEmptyField && ((res.grain ?? 0) > 0 || (res.vegetable ?? 0) > 0);
       const canBakeNow =
         (res.grain ?? 0) > 0 && player.improvements.some((id) => IMPROVEMENTS.some((d) => d.id === id && d.bake));
-      return canSow || canBakeNow ? null : 'nothing to sow or bake';
+      return canSow || canBakeNow ? null : { reason: 'nothing to sow or bake' };
     }
     default:
       return null;

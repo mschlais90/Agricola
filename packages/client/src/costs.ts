@@ -1,4 +1,4 @@
-import type { ResourceBag } from '@agricola/engine';
+import type { CostOption, ResourceBag } from '@agricola/engine';
 import { ICON } from './ui';
 
 export interface CostLine {
@@ -54,4 +54,39 @@ export function shortfallText(cost: ResourceBag, resources: Resources): string {
   const shorts = costLines(cost, resources).filter((l) => l.short > 0);
   if (shorts.length === 0) return '';
   return 'Short ' + shorts.map((l) => `${l.short}${ICON[l.resource] ?? l.resource}`).join(' ');
+}
+
+/** Total number of resources a path is short by — used to pick the closest one. */
+function totalShort(cost: ResourceBag, resources: Resources): number {
+  return costLines(cost, resources).reduce((s, l) => s + l.short, 0);
+}
+
+/** The `CostOption` the player is closest to affording (fewest missing resources). */
+export function closestOption(options: CostOption[], resources: Resources): CostOption | undefined {
+  return [...options].sort((a, b) => totalShort(a.cost, resources) - totalShort(b.cost, resources))[0];
+}
+
+/**
+ * Multi-line tooltip for a blocked action: the reason, then each way to satisfy
+ * it with a needed-vs-available breakdown. Alternatives are separated by "— or —".
+ */
+export function requirementTooltip(
+  reason: string | undefined,
+  options: CostOption[] | undefined,
+  resources: Resources,
+): string | undefined {
+  if (!options || options.length === 0) return reason || undefined;
+  const blocks = options.map((opt) => {
+    const head = opt.label ? `${opt.label}:` : 'Needs:';
+    return head + '\n' + costTooltip(opt.cost, resources).replace(/^Cost — needed vs\. available:\n/, '');
+  });
+  const body = blocks.join('\n— or —\n');
+  return reason ? `${reason}\n\n${body}` : body;
+}
+
+/** Inline "Short 2🌲" for the closest satisfying path (empty if nothing missing). */
+export function requirementShort(options: CostOption[] | undefined, resources: Resources): string {
+  if (!options || options.length === 0) return '';
+  const best = closestOption(options, resources);
+  return best ? shortfallText(best.cost, resources) : '';
 }
