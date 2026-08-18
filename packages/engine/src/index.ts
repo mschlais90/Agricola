@@ -11,7 +11,14 @@ export { getLegalActions } from './actions/legal';
 
 // Rules helpers (also used by the UI for previews)
 export { computePastures, countFences, type FenceError } from './rules/fencing';
-export { canAccommodate, computeAssignment, ANIMAL_TYPES, type AnimalAssignment } from './rules/capacity';
+export {
+  canAccommodate,
+  computeAssignment,
+  maxAdditional,
+  bestBreedingKeep,
+  ANIMAL_TYPES,
+  type AnimalAssignment,
+} from './rules/capacity';
 export {
   foodRequired,
   cookRate,

@@ -1,10 +1,14 @@
 import { useMemo, useState } from 'react';
 import {
+  ANIMAL_TYPES,
   IMPROVEMENTS,
   RULES,
   canBake,
+  cookRate,
   getActionSpaces,
+  maxAdditional,
   validateAction,
+  type AnimalType,
   type Crop,
   type EdgeRef,
   type GameAction,
@@ -30,7 +34,8 @@ export interface SpaceDialogProps {
 export function SpaceDialog({ state, spaceId, onSubmit, onCancel }: SpaceDialogProps) {
   const def = getActionSpaces(state.config).find((d) => d.id === spaceId)!;
   const player = state.players[state.currentPlayer]!;
-  const [choices, setChoices] = useState<SpaceChoices>({});
+  // Animal gains default to keeping as many as the farm can hold.
+  const [choices, setChoices] = useState<SpaceChoices>(() => initialChoices(state, spaceId));
   const [mode, setMode] = useState<'room' | 'stable'>('room'); // farmExpansion sub-mode
 
   // takeAnimalPool: the release count is derived, not user-entered.
@@ -325,6 +330,28 @@ function StepBtn({ onClick, children }: { onClick: () => void; children: React.R
   );
 }
 
+/**
+ * Starting choices for a dialog. Animal markets keep as many animals on the farm
+ * as there is room for, and cook the leftovers when the player owns a fireplace
+ * or hearth — so nothing is thrown away unless the player chooses to.
+ */
+function initialChoices(state: GameState, spaceId: string): SpaceChoices {
+  const def = getActionSpaces(state.config).find((d) => d.id === spaceId)!;
+  if (def.effect !== 'takeAnimalPool') return {};
+  const player = state.players[state.currentPlayer]!;
+  const { type, total } = animalPool(state, spaceId);
+  if (!type || total === 0) return {};
+  const keep = maxAdditional(player.farm, player.farm.animals, type, total);
+  const cook = cookRate(player, type) !== null ? total - keep : 0;
+  return { animalKeep: keep, animalCook: cook };
+}
+
+function animalPool(state: GameState, spaceId: string): { type?: AnimalType; total: number } {
+  const pool = state.actionSpaces[spaceId]!.pool as Record<string, number>;
+  const type = ANIMAL_TYPES.find((t) => (pool[t] ?? 0) > 0);
+  return { type, total: type ? pool[type]! : 0 };
+}
+
 function AnimalDistribution({
   state,
   spaceId,
@@ -336,20 +363,45 @@ function AnimalDistribution({
   choices: SpaceChoices;
   patch: (p: Partial<SpaceChoices>) => void;
 }) {
-  const pool = state.actionSpaces[spaceId]!.pool as Record<string, number>;
-  const type = (['sheep', 'boar', 'cattle'] as const).find((t) => (pool[t] ?? 0) > 0);
-  const total = type ? pool[type]! : 0;
+  const player = state.players[state.currentPlayer]!;
+  const { type, total } = animalPool(state, spaceId);
   const keep = choices.animalKeep ?? 0;
   const cook = choices.animalCook ?? 0;
-  const release = total - keep - cook;
+  const release = Math.max(0, total - keep - cook);
+  // How many of these animals the farm can hold on top of the current herd.
+  const roomFor = type ? maxAdditional(player.farm, player.farm.animals, type, total) : 0;
+  const canCook = type ? cookRate(player, type) !== null : false;
   return (
     <div>
       <p className="mb-1 text-sm">
         {total} {type && ICON[type]} to distribute:
       </p>
-      <Stepper label={`Keep on farm`} value={keep} max={total - cook} onChange={(n) => patch({ animalKeep: n })} />
-      <Stepper label={`Cook ${ICON.food}`} value={cook} max={total - keep} onChange={(n) => patch({ animalCook: n })} />
-      <p className="mt-1 text-xs text-stone-500">Released (run away): {Math.max(0, release)}</p>
+      {/* Each stepper pushes the other down rather than blocking, since keep + cook start full. */}
+      <Stepper
+        label="Keep on farm 🏡"
+        value={keep}
+        max={roomFor}
+        onChange={(n) => patch({ animalKeep: n, animalCook: Math.min(cook, total - n) })}
+      />
+      {canCook && (
+        <Stepper
+          label={`Cook ${ICON.food}`}
+          value={cook}
+          max={total}
+          onChange={(n) => patch({ animalCook: n, animalKeep: Math.min(keep, total - n) })}
+        />
+      )}
+      {roomFor < total && (
+        <p className="mt-1 text-xs text-amber-700">
+          Your farm only has room for {roomFor} more {type && ICON[type]}
+          {canCook ? ' — the rest are cooked for food.' : ' — fence a pasture or build a stable to keep more.'}
+        </p>
+      )}
+      {release > 0 && (
+        <p className="mt-1 text-xs text-red-600">
+          Released (run away): {release} {type && ICON[type]}
+        </p>
+      )}
     </div>
   );
 }

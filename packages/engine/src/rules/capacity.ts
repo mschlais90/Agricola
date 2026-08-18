@@ -150,3 +150,49 @@ function exhaustiveAssignment(
     pet: singlesList[0] ?? null,
   };
 }
+
+/**
+ * Largest n (0..max) of `type` that can be added to `counts` and still fit.
+ * Used by the UI to default animal gains to "keep as many as possible".
+ * canAccommodate is monotonic in the counts, so counting down finds the answer.
+ */
+export function maxAdditional(
+  farm: Farm,
+  counts: AnimalCounts,
+  type: AnimalType,
+  max: number,
+): number {
+  for (let n = max; n > 0; n--) {
+    if (canAccommodate(farm, { ...counts, [type]: counts[type] + n })) return n;
+  }
+  return 0;
+}
+
+/** Breeding tie-break when not every newborn fits: keep the more valuable animal. */
+const BREED_PRIORITY: Record<AnimalType, number> = { cattle: 3, boar: 2, sheep: 1 };
+
+/**
+ * The best subset of `eligible` newborns to keep: as many as will fit, breaking
+ * ties towards the more valuable animals. Defaults the breeding choice in the UI.
+ */
+export function bestBreedingKeep(
+  farm: Farm,
+  counts: AnimalCounts,
+  eligible: AnimalType[],
+): AnimalType[] {
+  let best: AnimalType[] = [];
+  let bestScore = -1;
+  for (let mask = 0; mask < 1 << eligible.length; mask++) {
+    const keep = eligible.filter((_, i) => mask & (1 << i));
+    const withKept: AnimalCounts = { ...counts };
+    for (const t of keep) withKept[t]++;
+    if (!canAccommodate(farm, withKept)) continue;
+    // more animals first, then the more valuable ones
+    const score = keep.length * 100 + keep.reduce((s, t) => s + BREED_PRIORITY[t], 0);
+    if (score > bestScore) {
+      bestScore = score;
+      best = keep;
+    }
+  }
+  return best;
+}

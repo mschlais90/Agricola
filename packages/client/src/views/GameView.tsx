@@ -12,6 +12,7 @@ import { BreedDialog } from '../components/BreedDialog';
 import { ConvertDialog } from '../components/ConvertDialog';
 import { FarmGrid } from '../components/FarmGrid';
 import { FeedDialog } from '../components/FeedDialog';
+import { RoundTrack, harvestText, roundsUntilHarvest } from '../components/RoundTrack';
 import { SpaceDialog } from '../components/SpaceDialog';
 import { useGameStore } from '../store/gameStore';
 import { ICON, PLAYER_COLORS, bagText } from '../ui';
@@ -44,7 +45,8 @@ export function GameView() {
   const myTurn = iControl(state.currentPlayer);
   const defaultSeat = mySeats === 'all' ? state.currentPlayer : mySeats[0]!;
   const shown = state.players[viewSeat ?? defaultSeat]!;
-  const nextHarvestIn = nextHarvest(state);
+  // A harvest at the end of this round (or one already under way) gets the loud treatment.
+  const harvestImminent = state.phase === 'feed' || roundsUntilHarvest(state) === 1;
 
   // Anytime cooking is done by the seat you control (the current player in hot-seat).
   const cookSeat = mySeats === 'all' ? state.currentPlayer : mySeats[0]!;
@@ -66,18 +68,22 @@ export function GameView() {
       {/* status bar */}
       <header className="sticky top-0 z-20 border-b border-stone-200 bg-white/95 px-3 py-2 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-2 text-sm">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             <span className="font-bold">
               Round {state.round}/{RULES.rounds}
             </span>
-            <span className="hidden text-stone-500 sm:inline">
-              Harvest {nextHarvestIn === 0 ? 'after this round' : `in ${nextHarvestIn + 1} rounds`} 🌾
+            <span
+              className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                harvestImminent ? 'bg-amber-600 text-white' : 'bg-amber-100 text-amber-800'
+              }`}
+            >
+              🌾 {harvestText(state)}
             </span>
           </div>
           <div className="flex items-center gap-2">
             <span className="inline-block h-3 w-3 rounded-full" style={{ background: PLAYER_COLORS[active.id] }} />
             <b>{active.name}</b>
-            <span className="text-stone-500">
+            <span className="hidden text-stone-500 sm:inline">
               {state.phase === 'work'
                 ? `places worker ${active.placed + 1}/${active.adults}`
                 : 'is feeding the family'}
@@ -86,6 +92,9 @@ export function GameView() {
           <button onClick={quitToLobby} className="rounded px-2 py-1 text-xs text-stone-400 hover:bg-stone-100">
             Quit
           </button>
+        </div>
+        <div className="mx-auto mt-1.5 max-w-6xl">
+          <RoundTrack state={state} />
         </div>
       </header>
 
@@ -196,11 +205,6 @@ export function GameView() {
   );
 }
 
-function nextHarvest(state: GameState): number {
-  for (const r of RULES.harvestRounds) if (r >= state.round) return r - state.round;
-  return 0;
-}
-
 function canCookSomething(player: GameState['players'][number]): boolean {
   if ((player.resources.grain ?? 0) > 0 || (player.resources.vegetable ?? 0) > 0) return true;
   const animals = player.farm.animals;
@@ -210,6 +214,10 @@ function canCookSomething(player: GameState['players'][number]): boolean {
 function PlayerPanel({ state, playerId }: { state: GameState; playerId: number }) {
   const p = state.players[playerId]!;
   const feedNeed = foodRequired(state, p);
+  const short = Math.max(0, feedNeed - (p.resources.food ?? 0));
+  const left = roundsUntilHarvest(state);
+  const harvestWhen =
+    state.phase === 'feed' ? 'harvest' : left === 1 ? 'harvest this round' : `harvest in ${left} rounds`;
   return (
     <div className="mt-2 rounded-lg bg-white p-3 text-sm shadow-sm">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
@@ -219,7 +227,11 @@ function PlayerPanel({ state, playerId }: { state: GameState; playerId: number }
           {ICON.family}×{p.adults}
           {p.newborns > 0 && ` +${p.newborns}👶`}
         </span>
-        <span className="text-stone-500">needs {feedNeed}{ICON.food}/harvest</span>
+        <span className={short > 0 ? 'font-medium text-red-600' : 'text-stone-500'}>
+          needs {feedNeed}
+          {ICON.food} at the {harvestWhen}
+          {short > 0 && ` — ${short} short`}
+        </span>
         {p.beggingCards > 0 && (
           <span className="text-red-600">
             {ICON.begging}×{p.beggingCards}
