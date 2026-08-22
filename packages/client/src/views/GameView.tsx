@@ -47,6 +47,9 @@ export function GameView() {
   const shown = state.players[viewSeat ?? defaultSeat]!;
   // A harvest at the end of this round (or one already under way) gets the loud treatment.
   const harvestImminent = state.phase === 'feed' || roundsUntilHarvest(state) === 1;
+  // Workers you have put out this round vs. the family you can place (newborns join next round).
+  const mine = state.players[defaultSeat]!;
+  const allPlaced = mine.placed >= mine.adults;
 
   // Anytime cooking is done by the seat you control (the current player in hot-seat).
   const cookSeat = mySeats === 'all' ? state.currentPlayer : mySeats[0]!;
@@ -78,6 +81,14 @@ export function GameView() {
               }`}
             >
               🌾 {harvestText(state)}
+            </span>
+            <span
+              title={`${mine.name} has placed ${mine.placed} of ${mine.adults} family members this round`}
+              className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                allPlaced ? 'bg-stone-100 text-stone-500' : 'bg-sky-100 text-sky-800'
+              }`}
+            >
+              {ICON.family} {mine.placed}/{mine.adults}
             </span>
           </div>
           <div className="flex items-center gap-2">
