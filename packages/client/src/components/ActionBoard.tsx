@@ -32,33 +32,34 @@ export function ActionBoard({ state, onPick }: ActionBoardProps) {
         const short = !enabled ? requirementShort(l?.requires, res) : '';
         const tip = !enabled ? requirementTooltip(l?.reason, l?.requires, res) : undefined;
         const value = pool || (def.gain ? bagText(def.gain) : '');
+        // One short line under the name when the action is blocked for a reason the
+        // occupant dot doesn't already explain; the full breakdown stays in the tooltip.
+        const note = enabled || occupant !== null ? '' : short || l?.reason || '';
         return (
           <button
             key={def.id}
             onClick={() => enabled && onPick(def.id)}
             disabled={!enabled}
             title={tip}
-            className={`flex items-center gap-1.5 rounded-lg border px-2 py-1.5 text-left text-sm transition ${
+            className={`flex min-h-9 items-center gap-1.5 rounded-lg border px-2 py-1 text-left transition ${
               enabled
                 ? 'cursor-pointer border-amber-500 bg-amber-50 shadow-sm ring-1 ring-amber-300 hover:bg-amber-100'
                 : 'border-stone-200 bg-stone-100 text-stone-400'
             }`}
           >
-            {def.stage && (
-              <span className="shrink-0 rounded bg-stone-200 px-1 text-[10px] leading-4 text-stone-500">
-                S{def.stage}
-              </span>
-            )}
             <span className="min-w-0 flex-1">
-              <span className="block font-medium leading-tight">{def.label}</span>
-              {!enabled && l?.reason && occupant === null && (
-                <span className="block text-[10px] leading-tight text-stone-400">
-                  {l.reason}
-                  {short && <span className="ml-1 font-semibold text-red-500">· {short}</span>}
+              <span className="block text-[13px] font-medium leading-tight">{def.label}</span>
+              {note && (
+                <span
+                  className={`block truncate text-[10px] leading-tight ${
+                    short ? 'font-semibold text-red-500' : 'text-stone-400'
+                  }`}
+                >
+                  {note}
                 </span>
               )}
             </span>
-            {value && <span className="shrink-0 text-right text-base leading-tight">{value}</span>}
+            {value && <span className="shrink-0 text-right text-base leading-none">{value}</span>}
             {occupant !== null && (
               <span
                 className="inline-block h-3.5 w-3.5 shrink-0 rounded-full border border-white"
