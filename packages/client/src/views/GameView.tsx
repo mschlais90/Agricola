@@ -7,7 +7,7 @@ import {
   getActionSpaces,
   type GameState,
 } from '@agricola/engine';
-import { ActionBoard } from '../components/ActionBoard';
+import { ActionBoard, ActionReference } from '../components/ActionBoard';
 import { BreedDialog } from '../components/BreedDialog';
 import { ConvertDialog } from '../components/ConvertDialog';
 import { FarmGrid } from '../components/FarmGrid';
@@ -119,43 +119,50 @@ export function GameView() {
         </div>
       )}
 
-      <main className="mx-auto grid max-w-6xl gap-4 p-3 lg:grid-cols-[1.1fr_1fr]">
-        <section>
-          <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-stone-500">Actions</h2>
-          <ActionBoard state={state} onPick={pick} />
-        </section>
+      <main className="mx-auto max-w-6xl p-3">
+        <div className="grid gap-4 lg:grid-cols-[1.1fr_1fr]">
+          <section>
+            <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-stone-500">Actions</h2>
+            <ActionBoard state={state} onPick={pick} />
+          </section>
 
-        <section>
-          <div className="mb-2 flex items-center justify-between">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-stone-500">
-              {shown.name}'s farm {shown.id !== defaultSeat && '(viewing)'}
-            </h2>
-            <div className="flex gap-1">
-              {state.players.map((p) => (
-                <button
-                  key={p.id}
-                  onClick={() => setViewSeat(p.id === defaultSeat ? null : p.id)}
-                  className={`rounded-full px-2 py-0.5 text-xs ${
-                    shown.id === p.id ? 'text-white' : 'bg-stone-200 text-stone-600'
-                  }`}
-                  style={shown.id === p.id ? { background: PLAYER_COLORS[p.id] } : undefined}
-                >
-                  {p.name}
-                  {disconnectedSeats.includes(p.id) && ' ⚠'}
-                </button>
-              ))}
+          <section>
+            <div className="mb-2 flex items-center justify-between">
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-stone-500">
+                {shown.name}'s farm {shown.id !== defaultSeat && '(viewing)'}
+              </h2>
+              <div className="flex gap-1">
+                {state.players.map((p) => (
+                  <button
+                    key={p.id}
+                    onClick={() => setViewSeat(p.id === defaultSeat ? null : p.id)}
+                    className={`rounded-full px-2 py-0.5 text-xs ${
+                      shown.id === p.id ? 'text-white' : 'bg-stone-200 text-stone-600'
+                    }`}
+                    style={shown.id === p.id ? { background: PLAYER_COLORS[p.id] } : undefined}
+                  >
+                    {p.name}
+                    {disconnectedSeats.includes(p.id) && ' ⚠'}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
-          <FarmGrid farm={shown.farm} />
-          <PlayerPanel state={state} playerId={shown.id} />
-          {showCookButton && (
-            <button
-              onClick={() => setShowCook(true)}
-              className="mt-2 w-full rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800 hover:bg-amber-100"
-            >
-              {ICON.food} Cook to food (any time)
-            </button>
-          )}
+            <FarmGrid farm={shown.farm} />
+            <PlayerPanel state={state} playerId={shown.id} />
+            {showCookButton && (
+              <button
+                onClick={() => setShowCook(true)}
+                className="mt-2 w-full rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800 hover:bg-amber-100"
+              >
+                {ICON.food} Cook to food (any time)
+              </button>
+            )}
+          </section>
+        </div>
+
+        {/* reference material lives at the bottom, out of the way of play */}
+        <section className="mt-5">
+          <ActionReference state={state} />
         </section>
       </main>
 

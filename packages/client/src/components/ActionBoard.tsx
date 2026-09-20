@@ -14,70 +14,83 @@ export interface ActionBoardProps {
 }
 
 export function ActionBoard({ state, onPick }: ActionBoardProps) {
-  const [showCatalog, setShowCatalog] = useState(false);
   const defs = getActionSpaces(state.config);
   const legal = new Map(
     getLegalActions(state, state.currentPlayer).map((l) => [l.space, l]),
   );
   const res = state.players[state.currentPlayer]?.resources as Record<string, number | undefined>;
   const revealedIds = defs.filter((d) => state.actionSpaces[d.id]?.revealed);
-  const upcoming = defs.filter((d) => d.stage && !state.actionSpaces[d.id]?.revealed);
+
+  return (
+    <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
+      {revealedIds.map((def) => {
+        const space = state.actionSpaces[def.id]!;
+        const l = legal.get(def.id);
+        const enabled = l?.enabled ?? false;
+        const occupant = space.occupiedBy;
+        const pool = bagText(space.pool as Record<string, number>);
+        const short = !enabled ? requirementShort(l?.requires, res) : '';
+        const tip = !enabled ? requirementTooltip(l?.reason, l?.requires, res) : undefined;
+        const value = pool || (def.gain ? bagText(def.gain) : '');
+        return (
+          <button
+            key={def.id}
+            onClick={() => enabled && onPick(def.id)}
+            disabled={!enabled}
+            title={tip}
+            className={`flex items-center gap-1.5 rounded-lg border px-2 py-1.5 text-left text-sm transition ${
+              enabled
+                ? 'cursor-pointer border-amber-500 bg-amber-50 shadow-sm ring-1 ring-amber-300 hover:bg-amber-100'
+                : 'border-stone-200 bg-stone-100 text-stone-400'
+            }`}
+          >
+            {def.stage && (
+              <span className="shrink-0 rounded bg-stone-200 px-1 text-[10px] leading-4 text-stone-500">
+                S{def.stage}
+              </span>
+            )}
+            <span className="min-w-0 flex-1">
+              <span className="block font-medium leading-tight">{def.label}</span>
+              {!enabled && l?.reason && occupant === null && (
+                <span className="block text-[10px] leading-tight text-stone-400">
+                  {l.reason}
+                  {short && <span className="ml-1 font-semibold text-red-500">· {short}</span>}
+                </span>
+              )}
+            </span>
+            {value && <span className="shrink-0 text-right text-base leading-tight">{value}</span>}
+            {occupant !== null && (
+              <span
+                className="inline-block h-3.5 w-3.5 shrink-0 rounded-full border border-white"
+                style={{ background: PLAYER_COLORS[occupant] }}
+                title={state.players[occupant]?.name}
+              />
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/**
+ * The reference material that belongs below the board rather than between it
+ * and your farm: the Major Improvement catalog and the round cards still to come.
+ */
+export function ActionReference({ state }: { state: GameState }) {
+  const [showCatalog, setShowCatalog] = useState(false);
+  const upcoming = getActionSpaces(state.config).filter(
+    (d) => d.stage && !state.actionSpaces[d.id]?.revealed,
+  );
 
   return (
     <div>
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-        {revealedIds.map((def) => {
-          const space = state.actionSpaces[def.id]!;
-          const l = legal.get(def.id);
-          const enabled = l?.enabled ?? false;
-          const occupant = space.occupiedBy;
-          const pool = bagText(space.pool as Record<string, number>);
-          const short = !enabled ? requirementShort(l?.requires, res) : '';
-          const tip = !enabled ? requirementTooltip(l?.reason, l?.requires, res) : undefined;
-          return (
-            <button
-              key={def.id}
-              onClick={() => enabled && onPick(def.id)}
-              disabled={!enabled}
-              title={tip}
-              className={`relative rounded-lg border p-2 text-left text-sm transition ${
-                enabled
-                  ? 'cursor-pointer border-amber-500 bg-amber-50 shadow-sm ring-1 ring-amber-300 hover:bg-amber-100'
-                  : 'border-stone-200 bg-stone-100 text-stone-400'
-              }`}
-            >
-              <div className="font-medium leading-tight">{def.label}</div>
-              <div className="mt-1 min-h-5 text-base">
-                {pool || (def.gain ? bagText(def.gain) : '')}
-              </div>
-              {def.stage && (
-                <div className="absolute right-1 top-1 rounded bg-stone-200 px-1 text-[10px] text-stone-500">
-                  S{def.stage}
-                </div>
-              )}
-              {occupant !== null && (
-                <span
-                  className="absolute bottom-1.5 right-1.5 inline-block h-4 w-4 rounded-full border border-white"
-                  style={{ background: PLAYER_COLORS[occupant] }}
-                  title={state.players[occupant]?.name}
-                />
-              )}
-              {!enabled && l?.reason && occupant === null && (
-                <div className="text-[10px] text-stone-400">
-                  {l.reason}
-                  {short && <span className="ml-1 font-semibold text-red-500">· {short}</span>}
-                </div>
-              )}
-            </button>
-          );
-        })}
-      </div>
       <button
         onClick={() => setShowCatalog(true)}
-        className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-stone-300 bg-white px-3 py-1.5 text-xs font-medium text-stone-600 hover:border-amber-400 hover:bg-amber-50"
+        className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-stone-300 bg-white px-3 py-1.5 text-xs font-medium text-stone-600 hover:border-amber-400 hover:bg-amber-50"
       >
         🏗️ Browse Major Improvements
-        <span className="text-stone-400">— see costs & what you're saving for</span>
+        <span className="hidden text-stone-400 sm:inline">— see costs &amp; what you're saving for</span>
       </button>
       {showCatalog && <ImprovementCatalog state={state} onClose={() => setShowCatalog(false)} />}
       {upcoming.length > 0 && (
